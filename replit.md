@@ -22,6 +22,20 @@ The following UX improvements were implemented to enhance gameplay experience:
 
 4. **Automatic Reconnection**: Players who disconnect (browser refresh, network interruption) automatically reconnect to their active game using localStorage session persistence. The system validates player identity and restores their game state seamlessly.
 
+5. **Automatic Epoch Ending**: The game now automatically detects when an epoch should end and displays a pulsing "Finalizar Época" (Finish Epoch) button:
+   - Appears when the board is completely full (all 30 cells occupied)
+   - Appears when no player can make any more moves (no tiles in deck, no castles available, no secret tiles, and no pending drawn tiles)
+   - Validates that no player has a pending drawn tile before allowing epoch completion
+   - Works in both 'playing' and 'scoring' phases
+   - Button text indicates when the board is full
+
+6. **Final Score Display**: After the third epoch completes, players see a comprehensive final scoreboard:
+   - Winner highlighted with golden gradient background and crown icon
+   - Top 3 players receive medals (gold, silver, bronze)
+   - Complete leaderboard showing all players ranked by gold total
+   - Game summary statistics (number of epochs, players, score difference)
+   - Distinct from the epoch score display used for intermediate scoring
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
