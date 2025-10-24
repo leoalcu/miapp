@@ -32,6 +32,21 @@ export interface BoardCell {
   castle?: Castle;
 }
 
+// Game log entry
+export interface GameLogEntry {
+  id: string;
+  timestamp: number;
+  epoch: 1 | 2 | 3;
+  playerName: string;
+  playerColor: PlayerColor;
+  action: 'PLACE_CASTLE' | 'DRAW_TILE' | 'PLACE_TILE' | 'PLAY_SECRET_TILE' | 'EPOCH_SCORE';
+  details: string; // Descripción de la acción
+  position?: { row: number; col: number }; // Posición si aplica
+  tile?: TileConfig; // Ficha colocada si aplica
+  castle?: { rank: 1 | 2 | 3 | 4 }; // Castillo colocado si aplica
+  scores?: Array<{ playerName: string; playerColor: PlayerColor; gold: number }>; // Puntuaciones de época
+}
+
 // Player state
 export interface Player {
   id: string;
@@ -59,6 +74,8 @@ export interface GameState {
   players: Player[];
   board: BoardCell[][];
   tileDeck: TileConfig[];
+  gameLog: GameLogEntry[];
+  lastPlayedTile?: TileConfig;
   createdAt: number;
 }
 
@@ -102,6 +119,24 @@ export const playerSchema = z.object({
   isReady: z.boolean(),
 });
 
+export const gameLogEntrySchema = z.object({
+  id: z.string(),
+  timestamp: z.number(),
+  epoch: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  playerName: z.string(),
+  playerColor: playerColorSchema,
+  action: z.enum(['PLACE_CASTLE', 'DRAW_TILE', 'PLACE_TILE', 'PLAY_SECRET_TILE', 'EPOCH_SCORE']),
+  details: z.string(),
+  position: z.object({ row: z.number(), col: z.number() }).optional(),
+  tile: tileConfigSchema.optional(),
+  castle: z.object({ rank: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]) }).optional(),
+  scores: z.array(z.object({
+    playerName: z.string(),
+    playerColor: playerColorSchema,
+    gold: z.number(),
+  })).optional(),
+});
+
 export const gameStateSchema = z.object({
   id: z.string(),
   roomCode: z.string(),
@@ -111,6 +146,8 @@ export const gameStateSchema = z.object({
   players: z.array(playerSchema),
   board: z.array(z.array(boardCellSchema)),
   tileDeck: z.array(tileConfigSchema),
+  gameLog: z.array(gameLogEntrySchema),
+  lastPlayedTile: tileConfigSchema.optional(),
   createdAt: z.number(),
 });
 

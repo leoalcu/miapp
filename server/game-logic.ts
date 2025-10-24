@@ -1,5 +1,30 @@
-import { GameState, Player, BoardCell, TileConfig, Castle, PlayerColor, GameAction } from "@shared/schema";
+import { GameState, Player, BoardCell, TileConfig, Castle, PlayerColor, GameAction, GameLogEntry } from "@shared/schema";
 import { randomUUID } from "crypto";
+
+// Helper function to create a log entry
+function createLogEntry(
+  gameState: GameState,
+  player: Player,
+  action: 'PLACE_CASTLE' | 'DRAW_TILE' | 'PLACE_TILE' | 'PLAY_SECRET_TILE' | 'EPOCH_SCORE',
+  details: string,
+  options?: {
+    position?: { row: number; col: number };
+    tile?: TileConfig;
+    castle?: { rank: 1 | 2 | 3 | 4 };
+    scores?: Array<{ playerName: string; playerColor: PlayerColor; gold: number }>;
+  }
+): GameLogEntry {
+  return {
+    id: randomUUID(),
+    timestamp: Date.now(),
+    epoch: gameState.epoch,
+    playerName: player.name,
+    playerColor: player.color,
+    action,
+    details,
+    ...options,
+  };
+}
 
 // Create initial tile deck according to official Kingdoms rules
 export function createTileDeck(): TileConfig[] {
@@ -75,6 +100,8 @@ export function initializeGame(roomCode: string, players: Player[]): GameState {
     players: playersWithSecretTiles,
     board,
     tileDeck,
+    gameLog: [],
+    lastPlayedTile: undefined,
     createdAt: Date.now(),
   };
 }
@@ -162,6 +189,14 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
     const drawnTile = newState.tileDeck.pop();
     if (drawnTile) {
       currentPlayer.drawnTile = drawnTile;
+      // Log the action
+      newState.gameLog.push(createLogEntry(
+        newState,
+        currentPlayer,
+        'DRAW_TILE',
+        `Robó una ficha del mazo`,
+        { tile: drawnTile }
+      ));
     }
     // Don't advance turn - player needs to place the tile
     return newState;
@@ -176,13 +211,39 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
     
     // Decrease castle count
     currentPlayer.castles[`rank${action.castleRank}` as keyof typeof currentPlayer.castles]--;
+    
+    // Log the action
+    newState.gameLog.push(createLogEntry(
+      newState,
+      currentPlayer,
+      'PLACE_CASTLE',
+      `Colocó un castillo de rango ${action.castleRank} en (${action.row}, ${action.col})`,
+      {
+        position: { row: action.row, col: action.col },
+        castle: { rank: action.castleRank }
+      }
+    ));
   }
   
   if (action.type === 'PLACE_DRAWN_TILE') {
     // Place the previously drawn tile
     if (currentPlayer.drawnTile) {
-      newState.board[action.row][action.col].tile = currentPlayer.drawnTile;
+      const placedTile = currentPlayer.drawnTile;
+      newState.board[action.row][action.col].tile = placedTile;
+      newState.lastPlayedTile = placedTile;
       currentPlayer.drawnTile = undefined;
+      
+      // Log the action
+      newState.gameLog.push(createLogEntry(
+        newState,
+        currentPlayer,
+        'PLACE_TILE',
+        `Colocó una ficha ${placedTile.type} (${placedTile.value > 0 ? '+' : ''}${placedTile.value}) en (${action.row}, ${action.col})`,
+        {
+          position: { row: action.row, col: action.col },
+          tile: placedTile
+        }
+      ));
     }
   }
   
@@ -191,14 +252,41 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
     const drawnTile = newState.tileDeck.pop();
     if (drawnTile) {
       newState.board[action.row][action.col].tile = drawnTile;
+      newState.lastPlayedTile = drawnTile;
+      
+      // Log the action
+      newState.gameLog.push(createLogEntry(
+        newState,
+        currentPlayer,
+        'PLACE_TILE',
+        `Colocó una ficha ${drawnTile.type} (${drawnTile.value > 0 ? '+' : ''}${drawnTile.value}) en (${action.row}, ${action.col})`,
+        {
+          position: { row: action.row, col: action.col },
+          tile: drawnTile
+        }
+      ));
     }
   }
   
   if (action.type === 'PLAY_SECRET_TILE') {
     // Play secret tile
     if (currentPlayer.secretTile) {
-      newState.board[action.row][action.col].tile = currentPlayer.secretTile;
+      const secretTile = currentPlayer.secretTile;
+      newState.board[action.row][action.col].tile = secretTile;
+      newState.lastPlayedTile = secretTile;
       currentPlayer.secretTile = undefined;
+      
+      // Log the action
+      newState.gameLog.push(createLogEntry(
+        newState,
+        currentPlayer,
+        'PLAY_SECRET_TILE',
+        `Jugó su ficha secreta ${secretTile.type} (${secretTile.value > 0 ? '+' : ''}${secretTile.value}) en (${action.row}, ${action.col})`,
+        {
+          position: { row: action.row, col: action.col },
+          tile: secretTile
+        }
+      ));
     }
   }
   
@@ -344,6 +432,25 @@ export function applyScoresAndNextEpoch(gameState: GameState): GameState {
     if (player) {
       player.gold += score.totalScore;
     }
+  });
+  
+  // Create score summary for log
+  const scoreSummary = newState.players.map(player => ({
+    playerName: player.name,
+    playerColor: player.color,
+    gold: player.gold
+  }));
+  
+  // Log epoch scores
+  newState.gameLog.push({
+    id: randomUUID(),
+    timestamp: Date.now(),
+    epoch: newState.epoch,
+    playerName: 'Sistema',
+    playerColor: 'red' as PlayerColor, // System log, color doesn't matter
+    action: 'EPOCH_SCORE',
+    details: `Época ${newState.epoch} finalizada`,
+    scores: scoreSummary
   });
   
   // Check if game is finished (after epoch 3)
