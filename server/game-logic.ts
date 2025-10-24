@@ -1,0 +1,343 @@
+import { GameState, Player, BoardCell, TileConfig, Castle, PlayerColor, GameAction } from "@shared/schema";
+import { randomUUID } from "crypto";
+
+// Create initial tile deck according to official Kingdoms rules
+export function createTileDeck(): TileConfig[] {
+  const tiles: TileConfig[] = [];
+  
+  // 12 Resource tiles: 2 of each value from +1 to +6
+  for (let value = 1; value <= 6; value++) {
+    tiles.push({ id: randomUUID(), type: 'resource', value, image: '' });
+    tiles.push({ id: randomUUID(), type: 'resource', value, image: '' });
+  }
+  
+  // 6 Hazard tiles: 1 of each value from -1 to -6
+  for (let value = -1; value >= -6; value--) {
+    tiles.push({ id: randomUUID(), type: 'hazard', value, image: '' });
+  }
+  
+  // Special tiles: 2 Mountains, 1 Dragon, 1 Gold Mine, 1 Wizard
+  tiles.push({ id: randomUUID(), type: 'mountain', value: 0, image: '' });
+  tiles.push({ id: randomUUID(), type: 'mountain', value: 0, image: '' });
+  tiles.push({ id: randomUUID(), type: 'dragon', value: 0, image: '' });
+  tiles.push({ id: randomUUID(), type: 'goldmine', value: 0, image: '' });
+  tiles.push({ id: randomUUID(), type: 'wizard', value: 0, image: '' });
+  
+  // Total: 12 + 6 + 5 = 23 tiles (matching official component list)
+  
+  // Shuffle using Fisher-Yates algorithm
+  for (let i = tiles.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+  }
+  
+  return tiles;
+}
+
+// Create initial empty board (5 rows x 6 columns)
+export function createEmptyBoard(): BoardCell[][] {
+  return Array.from({ length: 5 }, (_, row) =>
+    Array.from({ length: 6 }, (_, col) => ({ row, col }))
+  );
+}
+
+// Get initial castles for a player based on player count
+export function getInitialCastles(playerCount: number): Player['castles'] {
+  const rank1Count = playerCount === 2 ? 4 : playerCount === 3 ? 3 : 2;
+  return {
+    rank1: rank1Count,
+    rank2: 3,
+    rank3: 2,
+    rank4: 1,
+  };
+}
+
+// Initialize game state
+export function initializeGame(roomCode: string, players: Player[]): GameState {
+  const tileDeck = createTileDeck();
+  const board = createEmptyBoard();
+  
+  // Give each player their secret tile
+  const playersWithSecretTiles = players.map(player => ({
+    ...player,
+    secretTile: tileDeck.pop(),
+    gold: 50,
+    castles: getInitialCastles(players.length),
+  }));
+  
+  return {
+    id: randomUUID(),
+    roomCode,
+    phase: 'playing',
+    epoch: 1,
+    currentPlayerIndex: 0,
+    players: playersWithSecretTiles,
+    board,
+    tileDeck,
+    createdAt: Date.now(),
+  };
+}
+
+// Validate if a move is legal
+export function isValidMove(
+  gameState: GameState,
+  playerId: string,
+  action: GameAction
+): { valid: boolean; error?: string } {
+  const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+  
+  if (currentPlayer.id !== playerId) {
+    return { valid: false, error: 'Not your turn' };
+  }
+  
+  // Check if the target cell is empty
+  const targetCell = gameState.board[action.row]?.[action.col];
+  if (!targetCell) {
+    return { valid: false, error: 'Invalid position' };
+  }
+  
+  if (targetCell.tile || targetCell.castle) {
+    return { valid: false, error: 'Cell already occupied' };
+  }
+  
+  // Validate specific action types
+  if (action.type === 'PLACE_CASTLE') {
+    const castleCount = currentPlayer.castles[`rank${action.castleRank}` as keyof typeof currentPlayer.castles];
+    if (castleCount <= 0) {
+      return { valid: false, error: 'No castles of this rank available' };
+    }
+  }
+  
+  if (action.type === 'PLAY_SECRET_TILE') {
+    if (!currentPlayer.secretTile) {
+      return { valid: false, error: 'No secret tile available' };
+    }
+  }
+  
+  if (action.type === 'DRAW_AND_PLACE_TILE') {
+    if (gameState.tileDeck.length === 0) {
+      return { valid: false, error: 'No tiles left in deck' };
+    }
+  }
+  
+  return { valid: true };
+}
+
+// Execute a game action
+export function executeAction(gameState: GameState, playerId: string, action: GameAction): GameState {
+  const validation = isValidMove(gameState, playerId, action);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  
+  const newState = JSON.parse(JSON.stringify(gameState)) as GameState;
+  const currentPlayerIndex = newState.currentPlayerIndex;
+  const currentPlayer = newState.players[currentPlayerIndex];
+  
+  if (action.type === 'PLACE_CASTLE') {
+    // Place castle on board
+    newState.board[action.row][action.col].castle = {
+      rank: action.castleRank,
+      color: currentPlayer.color,
+    };
+    
+    // Decrease castle count
+    currentPlayer.castles[`rank${action.castleRank}` as keyof typeof currentPlayer.castles]--;
+  }
+  
+  if (action.type === 'DRAW_AND_PLACE_TILE') {
+    // Draw tile from deck
+    const drawnTile = newState.tileDeck.pop();
+    if (drawnTile) {
+      newState.board[action.row][action.col].tile = drawnTile;
+    }
+  }
+  
+  if (action.type === 'PLAY_SECRET_TILE') {
+    // Play secret tile
+    if (currentPlayer.secretTile) {
+      newState.board[action.row][action.col].tile = currentPlayer.secretTile;
+      currentPlayer.secretTile = undefined;
+    }
+  }
+  
+  // Move to next player
+  newState.currentPlayerIndex = (currentPlayerIndex + 1) % newState.players.length;
+  
+  // Check if epoch is complete (board is full)
+  const isBoardFull = newState.board.every(row =>
+    row.every(cell => cell.tile || cell.castle)
+  );
+  
+  if (isBoardFull) {
+    newState.phase = 'scoring';
+  }
+  
+  return newState;
+}
+
+// Calculate score for a row or column
+export function calculateLineScore(
+  cells: BoardCell[],
+  playerColor: PlayerColor,
+  board: BoardCell[][]
+): number {
+  // Check if there's a mountain that divides the line
+  const mountainIndex = cells.findIndex(cell => cell.tile?.type === 'mountain');
+  
+  if (mountainIndex !== -1) {
+    // Split into two segments and calculate separately
+    const segment1 = cells.slice(0, mountainIndex);
+    const segment2 = cells.slice(mountainIndex + 1);
+    return calculateSegmentScore(segment1, playerColor, board) + calculateSegmentScore(segment2, playerColor, board);
+  }
+  
+  return calculateSegmentScore(cells, playerColor, board);
+}
+
+function calculateSegmentScore(cells: BoardCell[], playerColor: PlayerColor, board: BoardCell[][]): number {
+  // Find all player's castles in this segment
+  const playerCastles = cells.filter(cell => cell.castle?.color === playerColor);
+  
+  if (playerCastles.length === 0) {
+    return 0; // No castles = no score
+  }
+  
+  // Calculate total castle rank
+  const totalRank = playerCastles.reduce((sum, cell) => {
+    let rank = cell.castle!.rank;
+    
+    // Check if adjacent to wizard (increases rank by 1)
+    if (isAdjacentToWizard(cell, board)) {
+      rank = Math.min(rank + 1, 4) as 1 | 2 | 3 | 4;
+    }
+    
+    return sum + rank;
+  }, 0);
+  
+  // Check if there's a dragon in this segment
+  const hasDragon = cells.some(cell => cell.tile?.type === 'dragon');
+  
+  // Calculate tile values
+  let tileValue = 0;
+  for (const cell of cells) {
+    if (!cell.tile) continue;
+    
+    const type = cell.tile.type;
+    const value = cell.tile.value;
+    
+    if (type === 'resource') {
+      // Dragon cancels all resource tiles
+      tileValue += hasDragon ? 0 : value;
+    } else if (type === 'hazard') {
+      // Hazards always count
+      tileValue += value;
+    }
+  }
+  
+  // Check if there's a gold mine (doubles the value)
+  const hasGoldMine = cells.some(cell => cell.tile?.type === 'goldmine');
+  if (hasGoldMine) {
+    tileValue *= 2;
+  }
+  
+  return tileValue * totalRank;
+}
+
+function isAdjacentToWizard(cell: BoardCell, board: BoardCell[][]): boolean {
+  const { row, col } = cell;
+  const adjacentCells = [
+    board[row - 1]?.[col], // up
+    board[row + 1]?.[col], // down
+    board[row]?.[col - 1], // left
+    board[row]?.[col + 1], // right
+  ];
+  
+  return adjacentCells.some(adjCell => adjCell?.tile?.type === 'wizard');
+}
+
+// Calculate scores for all players
+export function calculateEpochScores(gameState: GameState): Array<{
+  playerId: string;
+  rowScores: number[];
+  colScores: number[];
+  totalScore: number;
+}> {
+  const scores = gameState.players.map(player => {
+    const rowScores: number[] = [];
+    const colScores: number[] = [];
+    
+    // Calculate row scores
+    for (let row = 0; row < 5; row++) {
+      const rowCells = gameState.board[row];
+      rowScores.push(calculateLineScore(rowCells, player.color, gameState.board));
+    }
+    
+    // Calculate column scores
+    for (let col = 0; col < 6; col++) {
+      const colCells = gameState.board.map(row => row[col]);
+      colScores.push(calculateLineScore(colCells, player.color, gameState.board));
+    }
+    
+    const totalScore = [...rowScores, ...colScores].reduce((sum, s) => sum + s, 0);
+    
+    return {
+      playerId: player.id,
+      rowScores,
+      colScores,
+      totalScore,
+    };
+  });
+  
+  return scores;
+}
+
+// Apply scores and prepare for next epoch
+export function applyScoresAndNextEpoch(gameState: GameState): GameState {
+  const scores = calculateEpochScores(gameState);
+  const newState = JSON.parse(JSON.stringify(gameState)) as GameState;
+  
+  // Apply gold to players
+  scores.forEach(score => {
+    const player = newState.players.find(p => p.id === score.playerId);
+    if (player) {
+      player.gold += score.totalScore;
+    }
+  });
+  
+  // Check if game is finished (after epoch 3)
+  if (newState.epoch === 3) {
+    newState.phase = 'finished';
+    return newState;
+  }
+  
+  // Prepare for next epoch
+  newState.epoch = (newState.epoch + 1) as 1 | 2 | 3;
+  newState.phase = 'playing';
+  newState.board = createEmptyBoard();
+  
+  // Return only rank 1 castles to players
+  newState.players.forEach(player => {
+    const playerCount = newState.players.length;
+    const rank1Count = playerCount === 2 ? 4 : playerCount === 3 ? 3 : 2;
+    player.castles.rank1 = rank1Count;
+    player.secretTile = newState.tileDeck.pop();
+  });
+  
+  // Determine first player for next epoch (highest gold)
+  const sortedPlayers = [...newState.players].sort((a, b) => b.gold - a.gold);
+  const firstPlayerId = sortedPlayers[0].id;
+  newState.currentPlayerIndex = newState.players.findIndex(p => p.id === firstPlayerId);
+  
+  return newState;
+}
+
+// Generate random room code
+export function generateRoomCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude similar looking chars
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}

@@ -1,62 +1,103 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import HomePage from "@/components/HomePage";
 import RoomLobby from "@/components/RoomLobby";
 import GamePage from "@/pages/GamePage";
-import { Player } from "@shared/schema";
+import { useGameSocket } from "@/hooks/useGameSocket";
 
 function Router() {
-  // TODO: remove mock functionality - this will be replaced with real game state management
+  const { toast } = useToast();
+  const {
+    connected,
+    gameState,
+    playerId,
+    playerColor,
+    createRoom,
+    joinRoom,
+    toggleReady,
+    startGame,
+    executeAction,
+    finishEpoch,
+    error,
+  } = useGameSocket();
+
   const [gamePhase, setGamePhase] = useState<'home' | 'lobby' | 'game'>('home');
-  const [roomCode, setRoomCode] = useState('');
-  const [currentPlayerId, setCurrentPlayerId] = useState('');
 
-  const mockPlayers: Player[] = [
-    {
-      id: '1',
-      name: 'Juan',
-      color: 'red',
-      gold: 50,
-      castles: { rank1: 4, rank2: 3, rank3: 2, rank4: 1 },
-      isReady: true,
-    },
-    {
-      id: '2',
-      name: 'María',
-      color: 'blue',
-      gold: 50,
-      castles: { rank1: 4, rank2: 3, rank3: 2, rank4: 1 },
-      isReady: false,
-    },
-  ];
+  // Update game phase based on game state
+  useEffect(() => {
+    if (gameState) {
+      if (gameState.phase === 'lobby') {
+        setGamePhase('lobby');
+      } else if (gameState.phase === 'playing' || gameState.phase === 'scoring') {
+        setGamePhase('game');
+      } else if (gameState.phase === 'finished') {
+        setGamePhase('game'); // Stay in game to show final scores
+      }
+    }
+  }, [gameState]);
 
-  const handleCreateRoom = (playerName: string) => {
-    console.log('Creating room for:', playerName);
-    setRoomCode('ABC123');
-    setCurrentPlayerId('1');
-    setGamePhase('lobby');
+  // Show errors as toasts
+  useEffect(() => {
+    if (error) {
+      toast({
+        title: "Error",
+        description: error,
+        variant: "destructive",
+      });
+    }
+  }, [error, toast]);
+
+  const handleCreateRoom = async (playerName: string) => {
+    try {
+      await createRoom(playerName);
+      // Game phase will update via useEffect when gameState changes
+    } catch (err) {
+      console.error('Failed to create room:', err);
+    }
   };
 
-  const handleJoinRoom = (playerName: string, code: string) => {
-    console.log('Joining room:', code, 'as', playerName);
-    setRoomCode(code);
-    setCurrentPlayerId('2');
-    setGamePhase('lobby');
+  const handleJoinRoom = async (playerName: string, roomCode: string) => {
+    try {
+      await joinRoom(roomCode, playerName);
+      // Game phase will update via useEffect when gameState changes
+    } catch (err) {
+      console.error('Failed to join room:', err);
+    }
   };
 
-  const handleStartGame = () => {
-    console.log('Starting game');
-    setGamePhase('game');
+  const handleStartGame = async () => {
+    try {
+      await startGame();
+      // Game phase will update via useEffect when gameState changes
+    } catch (err) {
+      console.error('Failed to start game:', err);
+    }
   };
 
-  const handleToggleReady = () => {
-    console.log('Toggling ready status');
+  const handleToggleReady = async () => {
+    try {
+      await toggleReady();
+    } catch (err) {
+      console.error('Failed to toggle ready:', err);
+    }
   };
+
+  if (!connected) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-4">
+          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-lg text-muted-foreground">Conectando al servidor...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Switch>
@@ -67,19 +108,26 @@ function Router() {
             onJoinRoom={handleJoinRoom}
           />
         )}
-        {gamePhase === 'lobby' && (
+        {gamePhase === 'lobby' && gameState && playerId && (
           <div className="min-h-screen bg-background flex items-center justify-center p-4">
             <RoomLobby
-              roomCode={roomCode}
-              players={mockPlayers}
-              isHost={currentPlayerId === '1'}
+              roomCode={gameState.roomCode}
+              players={gameState.players}
+              isHost={playerId === gameState.players[0]?.id}
               onStartGame={handleStartGame}
               onToggleReady={handleToggleReady}
-              currentPlayerId={currentPlayerId}
+              currentPlayerId={playerId}
             />
           </div>
         )}
-        {gamePhase === 'game' && <GamePage />}
+        {gamePhase === 'game' && gameState && playerId && (
+          <GamePage
+            gameState={gameState}
+            playerId={playerId}
+            onExecuteAction={executeAction}
+            onFinishEpoch={finishEpoch}
+          />
+        )}
       </Route>
       <Route component={NotFound} />
     </Switch>

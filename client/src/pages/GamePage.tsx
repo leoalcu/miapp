@@ -5,105 +5,145 @@ import EpochTracker from "@/components/EpochTracker";
 import ActionPanel from "@/components/ActionPanel";
 import CastleSelector from "@/components/CastleSelector";
 import ScoreDisplay from "@/components/ScoreDisplay";
-import { BoardCell, Player } from "@shared/schema";
+import { GameState, GameAction } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
-export default function GamePage() {
+interface GamePageProps {
+  gameState: GameState;
+  playerId: string;
+  onExecuteAction: (action: GameAction) => Promise<void>;
+  onFinishEpoch: () => Promise<{ scores: any[] }>;
+}
+
+export default function GamePage({ gameState, playerId, onExecuteAction, onFinishEpoch }: GamePageProps) {
+  const { toast } = useToast();
   const [showCastleSelector, setShowCastleSelector] = useState(false);
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<'castle' | 'tile' | null>(null);
+  const [selectedAction, setSelectedAction] = useState<'castle' | 'tile' | 'secret' | null>(null);
+  const [selectedCastleRank, setSelectedCastleRank] = useState<1 | 2 | 3 | 4 | null>(null);
+  const [epochScores, setEpochScores] = useState<any[]>([]);
 
-  // Mock data - TODO: remove mock functionality
-  const mockBoard: BoardCell[][] = Array.from({ length: 5 }, (_, row) =>
-    Array.from({ length: 6 }, (_, col) => ({
-      row,
-      col,
-      tile: row === 0 && col === 0 ? { id: '1', type: 'resource' as const, value: 3, image: '' } :
-            row === 1 && col === 2 ? { id: '2', type: 'hazard' as const, value: -2, image: '' } :
-            row === 2 && col === 3 ? { id: '3', type: 'dragon' as const, value: 0, image: '' } :
-            row === 3 && col === 1 ? { id: '4', type: 'goldmine' as const, value: 0, image: '' } :
-            undefined,
-      castle: row === 0 && col === 1 ? { rank: 4 as const, color: 'red' as const } :
-              row === 1 && col === 3 ? { rank: 3 as const, color: 'blue' as const } :
-              undefined,
-    }))
-  );
+  const currentPlayer = gameState.players.find(p => p.id === playerId);
+  const isCurrentTurn = gameState.players[gameState.currentPlayerIndex]?.id === playerId;
 
-  const mockPlayers: Player[] = [
-    {
-      id: '1',
-      name: 'Juan',
-      color: 'red',
-      gold: 85,
-      castles: { rank1: 3, rank2: 2, rank3: 1, rank4: 0 },
-      secretTile: { id: 's1', type: 'resource', value: 4, image: '' },
-      isReady: false,
-    },
-    {
-      id: '2',
-      name: 'María',
-      color: 'blue',
-      gold: 62,
-      castles: { rank1: 4, rank2: 3, rank3: 2, rank4: 1 },
-      isReady: false,
-    },
-    {
-      id: '3',
-      name: 'Pedro',
-      color: 'yellow',
-      gold: 120,
-      castles: { rank1: 2, rank2: 1, rank3: 0, rank4: 0 },
-      secretTile: { id: 's2', type: 'hazard', value: -3, image: '' },
-      isReady: false,
-    },
-  ];
+  const handleCellClick = async (row: number, col: number) => {
+    if (!selectedAction || !isCurrentTurn) return;
 
-  const mockScores = [
-    {
-      playerId: '1',
-      rowScores: [12, -5, 18, 8, 0],
-      colScores: [15, 10, -8, 6, 12, 20],
-      totalScore: 88,
-    },
-    {
-      playerId: '2',
-      rowScores: [8, 15, -3, 12, 6],
-      colScores: [10, -5, 18, 8, 0, 15],
-      totalScore: 84,
-    },
-    {
-      playerId: '3',
-      rowScores: [20, 10, 5, -2, 15],
-      colScores: [18, 12, -3, 20, 8, 10],
-      totalScore: 113,
-    },
-  ];
+    try {
+      if (selectedAction === 'castle' && selectedCastleRank) {
+        await onExecuteAction({
+          type: 'PLACE_CASTLE',
+          castleRank: selectedCastleRank,
+          row,
+          col,
+        });
+      } else if (selectedAction === 'tile') {
+        await onExecuteAction({
+          type: 'DRAW_AND_PLACE_TILE',
+          row,
+          col,
+        });
+      } else if (selectedAction === 'secret') {
+        await onExecuteAction({
+          type: 'PLAY_SECRET_TILE',
+          row,
+          col,
+        });
+      }
 
-  const handleCellClick = (row: number, col: number) => {
-    console.log(`Cell clicked: ${row}, ${col}, action: ${selectedAction}`);
-    setSelectedAction(null);
+      // Reset selection
+      setSelectedAction(null);
+      setSelectedCastleRank(null);
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handlePlaceCastle = () => {
-    console.log('Place castle action');
+    if (!isCurrentTurn) {
+      toast({
+        title: "No es tu turno",
+        description: "Espera tu turno para jugar",
+        variant: "destructive",
+      });
+      return;
+    }
     setShowCastleSelector(true);
-    setSelectedAction('castle');
   };
 
-  const handleDrawTile = () => {
-    console.log('Draw tile action');
+  const handleDrawTile = async () => {
+    if (!isCurrentTurn) {
+      toast({
+        title: "No es tu turno",
+        description: "Espera tu turno para jugar",
+        variant: "destructive",
+      });
+      return;
+    }
     setSelectedAction('tile');
+    toast({
+      title: "Selecciona una celda",
+      description: "Haz clic en una celda vacía para colocar la ficha",
+    });
   };
 
   const handlePlaySecretTile = () => {
-    console.log('Play secret tile action');
-    setSelectedAction('tile');
+    if (!isCurrentTurn) {
+      toast({
+        title: "No es tu turno",
+        description: "Espera tu turno para jugar",
+        variant: "destructive",
+      });
+      return;
+    }
+    setSelectedAction('secret');
+    toast({
+      title: "Selecciona una celda",
+      description: "Haz clic en una celda vacía para colocar tu ficha secreta",
+    });
   };
 
   const handleSelectCastle = (rank: 1 | 2 | 3 | 4) => {
-    console.log(`Selected castle rank: ${rank}`);
+    setSelectedCastleRank(rank);
+    setSelectedAction('castle');
+    toast({
+      title: "Selecciona una celda",
+      description: `Haz clic en una celda vacía para colocar tu castillo de rango ${rank}`,
+    });
   };
+
+  const handleFinishEpoch = async () => {
+    try {
+      const result = await onFinishEpoch();
+      setEpochScores(result.scores);
+      setShowScoreDisplay(true);
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Get highlighted cells (empty cells when an action is selected)
+  const highlightedCells = selectedAction
+    ? gameState.board.flatMap((row, rowIdx) =>
+        row
+          .filter((cell, colIdx) => !cell.tile && !cell.castle)
+          .map(cell => ({ row: cell.row, col: cell.col }))
+      )
+    : [];
+
+  const isBoardFull = gameState.board.every(row =>
+    row.every(cell => cell.tile || cell.castle)
+  );
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -112,14 +152,27 @@ export default function GamePage() {
         <Card className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <h1 className="text-2xl font-serif font-bold">Kingdoms</h1>
-            <EpochTracker currentEpoch={2} />
-            <Button 
-              onClick={() => setShowScoreDisplay(true)}
-              variant="outline"
-              data-testid="button-view-scores"
-            >
-              Ver Puntuación
-            </Button>
+            <EpochTracker currentEpoch={gameState.epoch} />
+            <div className="flex gap-2">
+              {gameState.phase === 'finished' && (
+                <Button 
+                  onClick={() => setShowScoreDisplay(true)}
+                  variant="default"
+                  data-testid="button-view-final-scores"
+                >
+                  Puntuación Final
+                </Button>
+              )}
+              {isBoardFull && gameState.phase === 'playing' && isCurrentTurn && (
+                <Button 
+                  onClick={handleFinishEpoch}
+                  variant="default"
+                  data-testid="button-finish-epoch"
+                >
+                  Finalizar Época
+                </Button>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -128,12 +181,12 @@ export default function GamePage() {
           {/* Players Left Column */}
           <div className="space-y-2 order-2 lg:order-1">
             <h2 className="text-lg font-serif font-semibold mb-2">Jugadores</h2>
-            {mockPlayers.map((player, index) => (
+            {gameState.players.map((player, index) => (
               <PlayerPanel
                 key={player.id}
                 player={player}
-                isCurrentPlayer={index === 0}
-                isYou={index === 0}
+                isCurrentPlayer={index === gameState.currentPlayerIndex}
+                isYou={player.id === playerId}
               />
             ))}
           </div>
@@ -141,43 +194,62 @@ export default function GamePage() {
           {/* Game Board Center */}
           <div className="flex items-start justify-center order-1 lg:order-2">
             <GameBoard
-              board={mockBoard}
+              board={gameState.board}
               onCellClick={handleCellClick}
-              highlightedCells={selectedAction ? [{ row: 2, col: 2 }] : []}
-              currentPlayerColor="red"
+              highlightedCells={highlightedCells}
+              currentPlayerColor={currentPlayer?.color}
             />
           </div>
 
           {/* Action Panel Right Column */}
           <div className="order-3">
             <div className="sticky top-4">
-              <ActionPanel
-                onPlaceCastle={handlePlaceCastle}
-                onDrawTile={handleDrawTile}
-                onPlaySecretTile={handlePlaySecretTile}
-                hasSecretTile={true}
-                disabled={false}
-              />
+              {gameState.phase === 'playing' && (
+                <ActionPanel
+                  onPlaceCastle={handlePlaceCastle}
+                  onDrawTile={handleDrawTile}
+                  onPlaySecretTile={handlePlaySecretTile}
+                  hasSecretTile={!!currentPlayer?.secretTile}
+                  disabled={!isCurrentTurn}
+                />
+              )}
+              
+              {gameState.phase === 'finished' && (
+                <Card className="p-6 text-center space-y-4">
+                  <h2 className="text-2xl font-serif font-bold">¡Juego Terminado!</h2>
+                  <p className="text-muted-foreground">
+                    Ganador: {[...gameState.players].sort((a, b) => b.gold - a.gold)[0].name}
+                  </p>
+                  <Button 
+                    onClick={() => setShowScoreDisplay(true)}
+                    className="w-full"
+                  >
+                    Ver Puntuación Final
+                  </Button>
+                </Card>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Dialogs */}
-      <CastleSelector
-        open={showCastleSelector}
-        onClose={() => setShowCastleSelector(false)}
-        castles={mockPlayers[0].castles}
-        playerColor={mockPlayers[0].color}
-        onSelectCastle={handleSelectCastle}
-      />
+      {currentPlayer && (
+        <CastleSelector
+          open={showCastleSelector}
+          onClose={() => setShowCastleSelector(false)}
+          castles={currentPlayer.castles}
+          playerColor={currentPlayer.color}
+          onSelectCastle={handleSelectCastle}
+        />
+      )}
 
       <ScoreDisplay
         open={showScoreDisplay}
         onClose={() => setShowScoreDisplay(false)}
-        players={mockPlayers}
-        epoch={2}
-        scores={mockScores}
+        players={gameState.players}
+        epoch={gameState.epoch}
+        scores={epochScores}
       />
     </div>
   );
