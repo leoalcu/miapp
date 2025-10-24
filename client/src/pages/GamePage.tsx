@@ -8,6 +8,7 @@ import ScoreDisplay from "@/components/ScoreDisplay";
 import FinalScoreDisplay from "@/components/FinalScoreDisplay";
 import DrawnTileDialog from "@/components/DrawnTileDialog";
 import TileDeckCounter from "@/components/TileDeckCounter";
+import GameLog from "@/components/GameLog";
 import { GameState, GameAction } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -258,7 +259,10 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
           <div className="order-3">
             <div className="sticky top-4 space-y-4">
               {/* Tile Deck Counter */}
-              <TileDeckCounter count={gameState.tileDeck.length} />
+              <TileDeckCounter 
+                count={gameState.tileDeck.length}
+                lastPlayedTile={gameState.lastPlayedTile}
+              />
               
               {gameState.phase === 'playing' && (
                 <ActionPanel
@@ -286,6 +290,11 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                   </Button>
                 </Card>
               )}
+              
+              {/* Game Log */}
+              <div className="h-96">
+                <GameLog gameLog={gameState.gameLog} />
+              </div>
             </div>
           </div>
         </div>
