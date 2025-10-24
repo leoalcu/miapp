@@ -36,6 +36,34 @@ The following UX improvements were implemented to enhance gameplay experience:
    - Game summary statistics (number of epochs, players, score difference)
    - Distinct from the epoch score display used for intermediate scoring
 
+7. **Game History Log**: A comprehensive log tracks all player actions throughout the game:
+   - Records castle placements with rank and position
+   - Logs tile draws and placements with type, value, and position
+   - Tracks secret tile plays
+   - Records epoch scores for all players
+   - Displayed in a scrollable panel with auto-scroll to latest entries
+   - Color-coded by player for easy visual tracking
+   - Shows tile icons and contextual information
+
+8. **Last Played Tile Display**: The tile deck counter now shows the most recently played tile:
+   - Displays tile type, value, and icon
+   - Updates in real-time after each tile placement
+   - Helps players track game progression
+   - Implemented using reusable `tileUtils.ts` library for consistent tile rendering
+
+9. **Exit Game Button**: Players can cleanly exit finished games:
+   - "Salir del Juego" button appears in final score screen
+   - Clears localStorage session data
+   - Returns player to home page
+   - Prevents unintended auto-reconnection to finished games
+
+10. **Abandon Game Feature**: Players can end an active game for all participants:
+    - "Abandonar Partida" button available during gameplay
+    - Immediately transitions game to 'finished' state
+    - Server broadcasts 'game-abandoned' event to all players
+    - All players receive notification and updated game state
+    - Useful for ending games when players need to leave
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
