@@ -1,15 +1,17 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Player } from "@shared/schema";
-import { Trophy, Medal, Coins, Crown } from "lucide-react";
+import { Trophy, Medal, Coins, Crown, LogOut } from "lucide-react";
 
 interface FinalScoreDisplayProps {
   open: boolean;
   onClose: () => void;
   players: Player[];
+  onExit?: () => void;
 }
 
-export default function FinalScoreDisplay({ open, onClose, players }: FinalScoreDisplayProps) {
+export default function FinalScoreDisplay({ open, onClose, players, onExit }: FinalScoreDisplayProps) {
   const colorBadge: Record<string, string> = {
     red: 'bg-red-500',
     yellow: 'bg-yellow-500',
@@ -126,6 +128,19 @@ export default function FinalScoreDisplay({ open, onClose, players }: FinalScore
               </div>
             </CardContent>
           </Card>
+
+          {/* Exit Button */}
+          {onExit && (
+            <Button 
+              onClick={onExit}
+              className="w-full"
+              variant="outline"
+              data-testid="button-exit-game"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Salir y Nueva Partida
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

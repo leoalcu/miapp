@@ -19,9 +19,10 @@ interface GamePageProps {
   playerId: string;
   onExecuteAction: (action: GameAction) => Promise<void>;
   onFinishEpoch: () => Promise<{ scores: any[] }>;
+  onExitGame?: () => void;
 }
 
-export default function GamePage({ gameState, playerId, onExecuteAction, onFinishEpoch }: GamePageProps) {
+export default function GamePage({ gameState, playerId, onExecuteAction, onFinishEpoch, onExitGame }: GamePageProps) {
   const { toast } = useToast();
   const [showCastleSelector, setShowCastleSelector] = useState(false);
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
@@ -323,6 +324,7 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         open={showFinalScoreDisplay}
         onClose={() => setShowFinalScoreDisplay(false)}
         players={gameState.players}
+        onExit={onExitGame}
       />
 
       <DrawnTileDialog

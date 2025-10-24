@@ -25,6 +25,7 @@ function Router() {
     executeAction,
     finishEpoch,
     error,
+    clearSession,
   } = useGameSocket();
 
   const [gamePhase, setGamePhase] = useState<'home' | 'lobby' | 'game'>('home');
@@ -126,6 +127,7 @@ function Router() {
             playerId={playerId}
             onExecuteAction={executeAction}
             onFinishEpoch={finishEpoch}
+            onExitGame={clearSession}
           />
         )}
       </Route>
