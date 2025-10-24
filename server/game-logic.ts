@@ -61,6 +61,7 @@ export function initializeGame(roomCode: string, players: Player[]): GameState {
   const playersWithSecretTiles = players.map(player => ({
     ...player,
     secretTile: tileDeck.pop(),
+    drawnTile: undefined,
     gold: 50,
     castles: getInitialCastles(players.length),
   }));
@@ -90,7 +91,23 @@ export function isValidMove(
     return { valid: false, error: 'Not your turn' };
   }
   
-  // Check if the target cell is empty
+  // If player has a drawn tile, they MUST place it before doing anything else
+  if (currentPlayer.drawnTile && action.type !== 'PLACE_DRAWN_TILE') {
+    return { valid: false, error: 'You must place your drawn tile first' };
+  }
+  
+  // Handle DRAW_TILE action (no position needed)
+  if (action.type === 'DRAW_TILE') {
+    if (gameState.tileDeck.length === 0) {
+      return { valid: false, error: 'No tiles left in deck' };
+    }
+    if (currentPlayer.drawnTile) {
+      return { valid: false, error: 'Already have a drawn tile to place' };
+    }
+    return { valid: true };
+  }
+  
+  // For actions that require a position
   const targetCell = gameState.board[action.row]?.[action.col];
   if (!targetCell) {
     return { valid: false, error: 'Invalid position' };
@@ -105,6 +122,12 @@ export function isValidMove(
     const castleCount = currentPlayer.castles[`rank${action.castleRank}` as keyof typeof currentPlayer.castles];
     if (castleCount <= 0) {
       return { valid: false, error: 'No castles of this rank available' };
+    }
+  }
+  
+  if (action.type === 'PLACE_DRAWN_TILE') {
+    if (!currentPlayer.drawnTile) {
+      return { valid: false, error: 'No drawn tile to place' };
     }
   }
   
@@ -134,6 +157,16 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
   const currentPlayerIndex = newState.currentPlayerIndex;
   const currentPlayer = newState.players[currentPlayerIndex];
   
+  // Handle DRAW_TILE (doesn't advance turn)
+  if (action.type === 'DRAW_TILE') {
+    const drawnTile = newState.tileDeck.pop();
+    if (drawnTile) {
+      currentPlayer.drawnTile = drawnTile;
+    }
+    // Don't advance turn - player needs to place the tile
+    return newState;
+  }
+  
   if (action.type === 'PLACE_CASTLE') {
     // Place castle on board
     newState.board[action.row][action.col].castle = {
@@ -145,8 +178,16 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
     currentPlayer.castles[`rank${action.castleRank}` as keyof typeof currentPlayer.castles]--;
   }
   
+  if (action.type === 'PLACE_DRAWN_TILE') {
+    // Place the previously drawn tile
+    if (currentPlayer.drawnTile) {
+      newState.board[action.row][action.col].tile = currentPlayer.drawnTile;
+      currentPlayer.drawnTile = undefined;
+    }
+  }
+  
   if (action.type === 'DRAW_AND_PLACE_TILE') {
-    // Draw tile from deck
+    // Draw tile from deck (legacy action - still supported)
     const drawnTile = newState.tileDeck.pop();
     if (drawnTile) {
       newState.board[action.row][action.col].tile = drawnTile;
@@ -161,7 +202,7 @@ export function executeAction(gameState: GameState, playerId: string, action: Ga
     }
   }
   
-  // Move to next player
+  // Move to next player (except for DRAW_TILE which was handled above)
   newState.currentPlayerIndex = (currentPlayerIndex + 1) % newState.players.length;
   
   // Check if epoch is complete (board is full)
@@ -322,6 +363,7 @@ export function applyScoresAndNextEpoch(gameState: GameState): GameState {
     const rank1Count = playerCount === 2 ? 4 : playerCount === 3 ? 3 : 2;
     player.castles.rank1 = rank1Count;
     player.secretTile = newState.tileDeck.pop();
+    player.drawnTile = undefined; // Clear any drawn tiles
   });
   
   // Determine first player for next epoch (highest gold)

@@ -45,6 +45,7 @@ export interface Player {
     rank4: number;
   };
   secretTile?: TileConfig;
+  drawnTile?: TileConfig; // Ficha robada pendiente de colocar
   isReady: boolean;
 }
 
@@ -97,6 +98,7 @@ export const playerSchema = z.object({
     rank4: z.number(),
   }),
   secretTile: tileConfigSchema.optional(),
+  drawnTile: tileConfigSchema.optional(), // Ficha robada pendiente de colocar
   isReady: z.boolean(),
 });
 
@@ -115,7 +117,9 @@ export const gameStateSchema = z.object({
 // Action types for game moves
 export type GameAction =
   | { type: 'PLACE_CASTLE'; castleRank: 1 | 2 | 3 | 4; row: number; col: number }
-  | { type: 'DRAW_AND_PLACE_TILE'; row: number; col: number }
+  | { type: 'DRAW_TILE' } // Robar una ficha del mazo
+  | { type: 'PLACE_DRAWN_TILE'; row: number; col: number } // Colocar la ficha robada
+  | { type: 'DRAW_AND_PLACE_TILE'; row: number; col: number } // Mantener para compatibilidad
   | { type: 'PLAY_SECRET_TILE'; row: number; col: number };
 
 // Legacy user schema (keeping for compatibility)

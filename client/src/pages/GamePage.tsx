@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import GameBoard from "@/components/GameBoard";
 import PlayerPanel from "@/components/PlayerPanel";
 import EpochTracker from "@/components/EpochTracker";
 import ActionPanel from "@/components/ActionPanel";
 import CastleSelector from "@/components/CastleSelector";
 import ScoreDisplay from "@/components/ScoreDisplay";
+import DrawnTileDialog from "@/components/DrawnTileDialog";
+import TileDeckCounter from "@/components/TileDeckCounter";
 import { GameState, GameAction } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,12 +23,22 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
   const { toast } = useToast();
   const [showCastleSelector, setShowCastleSelector] = useState(false);
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
+  const [showDrawnTileDialog, setShowDrawnTileDialog] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'castle' | 'tile' | 'secret' | null>(null);
   const [selectedCastleRank, setSelectedCastleRank] = useState<1 | 2 | 3 | 4 | null>(null);
   const [epochScores, setEpochScores] = useState<any[]>([]);
 
   const currentPlayer = gameState.players.find(p => p.id === playerId);
   const isCurrentTurn = gameState.players[gameState.currentPlayerIndex]?.id === playerId;
+
+  // Show drawn tile dialog when player has a drawn tile
+  useEffect(() => {
+    if (currentPlayer?.drawnTile && isCurrentTurn) {
+      setShowDrawnTileDialog(true);
+    } else {
+      setShowDrawnTileDialog(false);
+    }
+  }, [currentPlayer?.drawnTile, isCurrentTurn]);
 
   const handleCellClick = async (row: number, col: number) => {
     if (!selectedAction || !isCurrentTurn) return;
@@ -40,8 +52,9 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
           col,
         });
       } else if (selectedAction === 'tile') {
+        // Place the previously drawn tile
         await onExecuteAction({
-          type: 'DRAW_AND_PLACE_TILE',
+          type: 'PLACE_DRAWN_TILE',
           row,
           col,
         });
@@ -86,10 +99,26 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
       });
       return;
     }
+    
+    try {
+      // First, draw a tile from the deck
+      await onExecuteAction({ type: 'DRAW_TILE' });
+      // Dialog will show automatically via useEffect when drawnTile is set
+    } catch (err: any) {
+      toast({
+        title: "Error",
+        description: err.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handlePlaceDrawnTile = () => {
+    setShowDrawnTileDialog(false);
     setSelectedAction('tile');
     toast({
       title: "Selecciona una celda",
-      description: "Haz clic en una celda vacía para colocar la ficha",
+      description: "Haz clic en una celda vacía para colocar tu ficha",
     });
   };
 
@@ -203,13 +232,17 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
 
           {/* Action Panel Right Column */}
           <div className="order-3">
-            <div className="sticky top-4">
+            <div className="sticky top-4 space-y-4">
+              {/* Tile Deck Counter */}
+              <TileDeckCounter count={gameState.tileDeck.length} />
+              
               {gameState.phase === 'playing' && (
                 <ActionPanel
                   onPlaceCastle={handlePlaceCastle}
                   onDrawTile={handleDrawTile}
                   onPlaySecretTile={handlePlaySecretTile}
                   hasSecretTile={!!currentPlayer?.secretTile}
+                  hasDrawnTile={!!currentPlayer?.drawnTile}
                   disabled={!isCurrentTurn}
                 />
               )}
@@ -250,6 +283,13 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         players={gameState.players}
         epoch={gameState.epoch}
         scores={epochScores}
+      />
+
+      <DrawnTileDialog
+        open={showDrawnTileDialog}
+        tile={currentPlayer?.drawnTile || null}
+        onClose={() => setShowDrawnTileDialog(false)}
+        onPlaceTile={handlePlaceDrawnTile}
       />
     </div>
   );

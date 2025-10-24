@@ -7,6 +7,7 @@ interface ActionPanelProps {
   onDrawTile: () => void;
   onPlaySecretTile: () => void;
   hasSecretTile: boolean;
+  hasDrawnTile?: boolean;
   disabled?: boolean;
 }
 
@@ -15,6 +16,7 @@ export default function ActionPanel({
   onDrawTile, 
   onPlaySecretTile, 
   hasSecretTile,
+  hasDrawnTile = false,
   disabled 
 }: ActionPanelProps) {
   return (
@@ -25,7 +27,7 @@ export default function ActionPanel({
       <CardContent className="space-y-2">
         <Button
           onClick={onPlaceCastle}
-          disabled={disabled}
+          disabled={disabled || hasDrawnTile}
           className="w-full justify-start gap-2"
           variant="default"
           data-testid="button-place-castle"
@@ -36,18 +38,18 @@ export default function ActionPanel({
         
         <Button
           onClick={onDrawTile}
-          disabled={disabled}
+          disabled={disabled || hasDrawnTile}
           className="w-full justify-start gap-2"
           variant="default"
           data-testid="button-draw-tile"
         >
           <Layers className="w-4 h-4" />
-          Robar y Colocar Ficha
+          Robar Ficha
         </Button>
         
         <Button
           onClick={onPlaySecretTile}
-          disabled={disabled || !hasSecretTile}
+          disabled={disabled || !hasSecretTile || hasDrawnTile}
           className="w-full justify-start gap-2"
           variant="secondary"
           data-testid="button-play-secret"
@@ -56,7 +58,13 @@ export default function ActionPanel({
           Jugar Ficha Secreta
         </Button>
         
-        {!hasSecretTile && (
+        {hasDrawnTile && (
+          <p className="text-xs text-muted-foreground text-center pt-2">
+            Debes colocar tu ficha robada primero
+          </p>
+        )}
+        
+        {!hasSecretTile && !hasDrawnTile && (
           <p className="text-xs text-muted-foreground text-center pt-2">
             No tienes ficha secreta
           </p>

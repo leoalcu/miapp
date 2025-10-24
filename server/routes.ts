@@ -92,6 +92,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Rejoin room (for reconnection)
+    socket.on("rejoin-room", async (data: { roomCode: string; playerId: string }, callback) => {
+      try {
+        const room = await storage.getRoom(data.roomCode);
+        
+        if (!room) {
+          callback({ success: false, error: "Room not found" });
+          return;
+        }
+        
+        const player = room.players.find(p => p.id === data.playerId);
+        if (!player) {
+          callback({ success: false, error: "Player not found in room" });
+          return;
+        }
+        
+        // Rejoin the socket room
+        socket.join(data.roomCode);
+        socket.data.roomCode = data.roomCode;
+        socket.data.playerId = data.playerId;
+        
+        callback({ 
+          success: true, 
+          roomCode: data.roomCode,
+          playerId: data.playerId, 
+          playerColor: player.color,
+          gameState: createPlayerView(room, data.playerId)
+        });
+        
+        // Notify all players that someone reconnected
+        for (const p of room.players) {
+          const playerSockets = await io.in(data.roomCode).fetchSockets();
+          const playerSocket = playerSockets.find(s => s.data.playerId === p.id);
+          if (playerSocket) {
+            playerSocket.emit("room-updated", createPlayerView(room, p.id));
+          }
+        }
+      } catch (error: any) {
+        callback({ success: false, error: error.message });
+      }
+    });
+
     // Toggle ready status
     socket.on("toggle-ready", async (callback) => {
       try {
