@@ -24,6 +24,7 @@ function Router() {
     startGame,
     executeAction,
     finishEpoch,
+    abandonGame,
     error,
     clearSession,
   } = useGameSocket();
@@ -127,6 +128,7 @@ function Router() {
             playerId={playerId}
             onExecuteAction={executeAction}
             onFinishEpoch={finishEpoch}
+            onAbandonGame={abandonGame}
             onExitGame={clearSession}
           />
         )}

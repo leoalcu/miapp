@@ -296,6 +296,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
+    // Abandon game (ends game for all players immediately)
+    socket.on("abandon-game", async (callback) => {
+      try {
+        const roomCode = socket.data.roomCode;
+        const playerId = socket.data.playerId;
+        
+        if (!roomCode) {
+          callback({ success: false, error: "Not in a room" });
+          return;
+        }
+        
+        const room = await storage.getRoom(roomCode);
+        if (!room) {
+          callback({ success: false, error: "Room not found" });
+          return;
+        }
+        
+        // Set game to finished state
+        const abandonedState: GameState = {
+          ...room,
+          phase: 'finished',
+        };
+        
+        await storage.updateRoom(roomCode, abandonedState);
+        
+        callback({ success: true });
+        
+        // Notify all players that the game was abandoned
+        const playerSockets = await io.in(roomCode).fetchSockets();
+        for (const playerSocket of playerSockets) {
+          const socketPlayerId = playerSocket.data.playerId;
+          if (socketPlayerId) {
+            playerSocket.emit("game-abandoned", {
+              abandonedBy: playerId,
+              newState: createPlayerView(abandonedState, socketPlayerId)
+            });
+          }
+        }
+      } catch (error: any) {
+        callback({ success: false, error: error.message });
+      }
+    });
+
     // Disconnect
     socket.on("disconnect", () => {
       console.log(`Client disconnected: ${socket.id}`);

@@ -14,6 +14,7 @@ interface UseGameSocketResult {
   startGame: () => Promise<void>;
   executeAction: (action: GameAction) => Promise<void>;
   finishEpoch: () => Promise<{ scores: any[] }>;
+  abandonGame: () => Promise<void>;
   error: string | null;
   clearSession: () => void;
 }
@@ -87,6 +88,11 @@ export function useGameSocket(): UseGameSocketResult {
 
     socket.on('epoch-finished', ({ scores, newState }: { scores: any[]; newState: GameState }) => {
       console.log('Epoch finished', scores, newState);
+      setGameState(newState);
+    });
+
+    socket.on('game-abandoned', ({ abandonedBy, newState }: { abandonedBy: string; newState: GameState }) => {
+      console.log('Game abandoned by player:', abandonedBy);
       setGameState(newState);
     });
 
@@ -260,6 +266,25 @@ export function useGameSocket(): UseGameSocketResult {
     });
   }, []);
 
+  const abandonGame = useCallback(async () => {
+    return new Promise<void>((resolve, reject) => {
+      if (!socketRef.current) {
+        reject(new Error('Not connected'));
+        return;
+      }
+
+      socketRef.current.emit('abandon-game', (response: any) => {
+        if (response.success) {
+          setError(null);
+          resolve();
+        } else {
+          setError(response.error);
+          reject(new Error(response.error));
+        }
+      });
+    });
+  }, []);
+
   const clearSession = useCallback(() => {
     localStorage.removeItem('kingdoms_session');
     setGameState(null);
@@ -279,6 +304,7 @@ export function useGameSocket(): UseGameSocketResult {
     startGame,
     executeAction,
     finishEpoch,
+    abandonGame,
     error,
     clearSession,
   };

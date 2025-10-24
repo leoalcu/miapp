@@ -19,10 +19,11 @@ interface GamePageProps {
   playerId: string;
   onExecuteAction: (action: GameAction) => Promise<void>;
   onFinishEpoch: () => Promise<{ scores: any[] }>;
+  onAbandonGame: () => Promise<void>;
   onExitGame?: () => void;
 }
 
-export default function GamePage({ gameState, playerId, onExecuteAction, onFinishEpoch, onExitGame }: GamePageProps) {
+export default function GamePage({ gameState, playerId, onExecuteAction, onFinishEpoch, onAbandonGame, onExitGame }: GamePageProps) {
   const { toast } = useToast();
   const [showCastleSelector, setShowCastleSelector] = useState(false);
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
@@ -225,6 +226,29 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                   className="animate-pulse"
                 >
                   {isBoardFull ? 'Tablero Lleno - ' : ''}Finalizar Época {gameState.epoch}
+                </Button>
+              )}
+              {(gameState.phase === 'playing' || gameState.phase === 'scoring') && (
+                <Button 
+                  onClick={async () => {
+                    try {
+                      await onAbandonGame();
+                      toast({
+                        title: "Partida abandonada",
+                        description: "La partida ha sido finalizada",
+                      });
+                    } catch (err: any) {
+                      toast({
+                        title: "Error",
+                        description: err.message,
+                        variant: "destructive",
+                      });
+                    }
+                  }}
+                  variant="destructive"
+                  data-testid="button-abandon-game"
+                >
+                  Abandonar Partida
                 </Button>
               )}
             </div>
