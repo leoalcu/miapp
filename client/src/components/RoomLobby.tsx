@@ -105,16 +105,14 @@ export default function RoomLobby({
 
           {/* Actions */}
           <div className="space-y-2">
-            {!isHost && (
-              <Button
-                onClick={onToggleReady}
-                variant={currentPlayer?.isReady ? 'outline' : 'default'}
-                className="w-full"
-                data-testid="button-toggle-ready"
-              >
-                {currentPlayer?.isReady ? 'Cancelar' : 'Estoy Listo'}
-              </Button>
-            )}
+            <Button
+              onClick={onToggleReady}
+              variant={currentPlayer?.isReady ? 'outline' : 'default'}
+              className="w-full"
+              data-testid="button-toggle-ready"
+            >
+              {currentPlayer?.isReady ? 'Cancelar' : 'Estoy Listo'}
+            </Button>
 
             {isHost && (
               <Button
