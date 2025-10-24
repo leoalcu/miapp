@@ -357,7 +357,10 @@ export function applyScoresAndNextEpoch(gameState: GameState): GameState {
   newState.phase = 'playing';
   newState.board = createEmptyBoard();
   
-  // Return only rank 1 castles to players
+  // Create a new shuffled tile deck for the next epoch
+  newState.tileDeck = createTileDeck();
+  
+  // Return only rank 1 castles to players and give new secret tiles
   newState.players.forEach(player => {
     const playerCount = newState.players.length;
     const rank1Count = playerCount === 2 ? 4 : playerCount === 3 ? 3 : 2;
