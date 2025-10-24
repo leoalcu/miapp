@@ -5,6 +5,7 @@ import EpochTracker from "@/components/EpochTracker";
 import ActionPanel from "@/components/ActionPanel";
 import CastleSelector from "@/components/CastleSelector";
 import ScoreDisplay from "@/components/ScoreDisplay";
+import FinalScoreDisplay from "@/components/FinalScoreDisplay";
 import DrawnTileDialog from "@/components/DrawnTileDialog";
 import TileDeckCounter from "@/components/TileDeckCounter";
 import { GameState, GameAction } from "@shared/schema";
@@ -23,6 +24,7 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
   const { toast } = useToast();
   const [showCastleSelector, setShowCastleSelector] = useState(false);
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
+  const [showFinalScoreDisplay, setShowFinalScoreDisplay] = useState(false);
   const [showDrawnTileDialog, setShowDrawnTileDialog] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'castle' | 'tile' | 'secret' | null>(null);
   const [selectedCastleRank, setSelectedCastleRank] = useState<1 | 2 | 3 | 4 | null>(null);
@@ -174,6 +176,27 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
     row.every(cell => cell.tile || cell.castle)
   );
 
+  // Check if there are any valid moves left for ANY player
+  const hasEmptyCells = gameState.board.some(row =>
+    row.some(cell => !cell.tile && !cell.castle)
+  );
+  
+  // Check if ANY player has pending actions or can make a move
+  const anyPlayerHasPendingMoves = gameState.players.some(player => 
+    player.drawnTile // Has a drawn tile that MUST be placed
+  );
+  
+  const anyPlayerCanMakeNewMove = hasEmptyCells && gameState.players.some(player => 
+    gameState.tileDeck.length > 0 || // Can draw tiles
+    player.secretTile || // Can play secret tile
+    Object.values(player.castles).some(count => count > 0) // Can place castle
+  );
+  
+  // Show finish button ONLY when: no pending moves AND (no new moves possible OR board is full)
+  const shouldShowFinishEpoch = (gameState.phase === 'playing' || gameState.phase === 'scoring') && 
+    !anyPlayerHasPendingMoves && 
+    (!anyPlayerCanMakeNewMove || isBoardFull);
+
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto space-y-4">
@@ -185,20 +208,21 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
             <div className="flex gap-2">
               {gameState.phase === 'finished' && (
                 <Button 
-                  onClick={() => setShowScoreDisplay(true)}
+                  onClick={() => setShowFinalScoreDisplay(true)}
                   variant="default"
                   data-testid="button-view-final-scores"
                 >
-                  Puntuación Final
+                  Ver Puntuación Final
                 </Button>
               )}
-              {isBoardFull && gameState.phase === 'playing' && isCurrentTurn && (
+              {shouldShowFinishEpoch && (
                 <Button 
                   onClick={handleFinishEpoch}
                   variant="default"
                   data-testid="button-finish-epoch"
+                  className="animate-pulse"
                 >
-                  Finalizar Época
+                  {isBoardFull ? 'Tablero Lleno - ' : ''}Finalizar Época {gameState.epoch}
                 </Button>
               )}
             </div>
@@ -254,8 +278,9 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                     Ganador: {[...gameState.players].sort((a, b) => b.gold - a.gold)[0].name}
                   </p>
                   <Button 
-                    onClick={() => setShowScoreDisplay(true)}
+                    onClick={() => setShowFinalScoreDisplay(true)}
                     className="w-full"
+                    data-testid="button-show-final-scores"
                   >
                     Ver Puntuación Final
                   </Button>
@@ -283,6 +308,12 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         players={gameState.players}
         epoch={gameState.epoch}
         scores={epochScores}
+      />
+
+      <FinalScoreDisplay
+        open={showFinalScoreDisplay}
+        onClose={() => setShowFinalScoreDisplay(false)}
+        players={gameState.players}
       />
 
       <DrawnTileDialog
