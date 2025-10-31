@@ -6,7 +6,15 @@ import { executeAction, applyScoresAndNextEpoch, calculateEpochScores, initializ
 import { createPlayerView } from "./game-utils";
 import { GameAction, GameState } from "@shared/schema";
 
+// Importar las nuevas rutas
+import authRoutes from "./routes/auth";
+import gamesRoutes from "./routes/games";
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Registrar rutas de autenticación y gestión de partidas
+  app.use("/api/auth", authRoutes);
+  app.use("/api/games", gamesRoutes);
+
   const httpServer = createServer(app);
   const io = new SocketIOServer(httpServer, {
     cors: {

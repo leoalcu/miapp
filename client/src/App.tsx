@@ -9,7 +9,12 @@ import NotFound from "@/pages/not-found";
 import HomePage from "@/components/HomePage";
 import RoomLobby from "@/components/RoomLobby";
 import GamePage from "@/pages/GamePage";
+import LoginPage from "@/pages/LoginPage";
+import RankingsPage from "@/pages/RankingsPage";
+import HistoryPage from "@/pages/HistoryPage";
+import Navigation from "@/components/Navigation";
 import { useGameSocket } from "@/hooks/useGameSocket";
+import { AuthProvider } from "@/hooks/useAuth";
 
 function Router() {
   const { toast } = useToast();
@@ -58,7 +63,6 @@ function Router() {
   const handleCreateRoom = async (playerName: string) => {
     try {
       await createRoom(playerName);
-      // Game phase will update via useEffect when gameState changes
     } catch (err) {
       console.error('Failed to create room:', err);
     }
@@ -67,7 +71,6 @@ function Router() {
   const handleJoinRoom = async (playerName: string, roomCode: string) => {
     try {
       await joinRoom(roomCode, playerName);
-      // Game phase will update via useEffect when gameState changes
     } catch (err) {
       console.error('Failed to join room:', err);
     }
@@ -76,7 +79,6 @@ function Router() {
   const handleStartGame = async () => {
     try {
       await startGame();
-      // Game phase will update via useEffect when gameState changes
     } catch (err) {
       console.error('Failed to start game:', err);
     }
@@ -103,24 +105,36 @@ function Router() {
 
   return (
     <Switch>
+      {/* Rutas de autenticación y navegación */}
+      <Route path="/login" component={LoginPage} />
+      <Route path="/rankings" component={RankingsPage} />
+      <Route path="/history" component={HistoryPage} />
+
+      {/* Ruta principal del juego */}
       <Route path="/">
         {gamePhase === 'home' && (
-          <HomePage
-            onCreateRoom={handleCreateRoom}
-            onJoinRoom={handleJoinRoom}
-          />
+          <>
+            <Navigation />
+            <HomePage
+              onCreateRoom={handleCreateRoom}
+              onJoinRoom={handleJoinRoom}
+            />
+          </>
         )}
         {gamePhase === 'lobby' && gameState && playerId && (
-          <div className="min-h-screen bg-background flex items-center justify-center p-4">
-            <RoomLobby
-              roomCode={gameState.roomCode}
-              players={gameState.players}
-              isHost={playerId === gameState.players[0]?.id}
-              onStartGame={handleStartGame}
-              onToggleReady={handleToggleReady}
-              currentPlayerId={playerId}
-            />
-          </div>
+          <>
+            <Navigation />
+            <div className="min-h-screen bg-background flex items-center justify-center p-4">
+              <RoomLobby
+                roomCode={gameState.roomCode}
+                players={gameState.players}
+                isHost={playerId === gameState.players[0]?.id}
+                onStartGame={handleStartGame}
+                onToggleReady={handleToggleReady}
+                currentPlayerId={playerId}
+              />
+            </div>
+          </>
         )}
         {gamePhase === 'game' && gameState && playerId && (
           <GamePage
@@ -133,6 +147,7 @@ function Router() {
           />
         )}
       </Route>
+      
       <Route component={NotFound} />
     </Switch>
   );
@@ -141,10 +156,12 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+        </TooltipProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 }
