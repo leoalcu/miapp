@@ -9,6 +9,7 @@ import FinalScoreDisplay from "@/components/FinalScoreDisplay";
 import DrawnTileDialog from "@/components/DrawnTileDialog";
 import TileDeckCounter from "@/components/TileDeckCounter";
 import GameLog from "@/components/GameLog";
+import SaveGameDialog from "@/components/SaveGameDialog";
 import { GameState, GameAction } from "@shared/schema";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,8 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
   const [showScoreDisplay, setShowScoreDisplay] = useState(false);
   const [showFinalScoreDisplay, setShowFinalScoreDisplay] = useState(false);
   const [showDrawnTileDialog, setShowDrawnTileDialog] = useState(false);
+  const [showSaveGameDialog, setShowSaveGameDialog] = useState(false);
+  const [gameSaved, setGameSaved] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'castle' | 'tile' | 'secret' | null>(null);
   const [selectedCastleRank, setSelectedCastleRank] = useState<1 | 2 | 3 | 4 | null>(null);
   const [epochScores, setEpochScores] = useState<any[]>([]);
@@ -44,6 +47,16 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
       setShowDrawnTileDialog(false);
     }
   }, [currentPlayer?.drawnTile, isCurrentTurn]);
+
+  // Show save game dialog when game finishes
+  useEffect(() => {
+    if (gameState.phase === 'finished' && !gameSaved) {
+      const timer = setTimeout(() => {
+        setShowSaveGameDialog(true);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [gameState.phase, gameSaved]);
 
   const handleCellClick = async (row: number, col: number) => {
     if (!selectedAction || !isCurrentTurn) return;
@@ -356,6 +369,13 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         tile={currentPlayer?.drawnTile || null}
         onClose={() => setShowDrawnTileDialog(false)}
         onPlaceTile={handlePlaceDrawnTile}
+      />
+
+      <SaveGameDialog
+        open={showSaveGameDialog}
+        onClose={() => setShowSaveGameDialog(false)}
+        gameState={gameState}
+        onGameSaved={() => setGameSaved(true)}
       />
     </div>
   );

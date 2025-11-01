@@ -5,21 +5,30 @@ import 'dotenv/config';
 
 async function migrate() {
   console.log('🚀 Iniciando migración de base de datos...');
+  console.log('📍 DATABASE_URL:', process.env.DATABASE_URL?.substring(0, 50) + '...');
 
   const connectionString = process.env.DATABASE_URL;
   
   if (!connectionString) {
-    throw new Error('DATABASE_URL no está definida');
+    console.error('❌ DATABASE_URL no está definida');
+    process.exit(1);
   }
+
+  console.log('🔌 Intentando conectar a la base de datos...');
 
   // Crear conexión directa para migración
   const client = postgres(connectionString, {
     ssl: 'require',
     max: 1,
+    connect_timeout: 30,
+    idle_timeout: 30,
   });
 
   try {
+    console.log('✅ Conexión establecida');
+    
     // Crear tabla users
+    console.log('📝 Creando tabla users...');
     await client`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -32,6 +41,7 @@ async function migrate() {
     console.log('✅ Tabla users creada');
 
     // Crear tabla games
+    console.log('📝 Creando tabla games...');
     await client`
       CREATE TABLE IF NOT EXISTS games (
         id SERIAL PRIMARY KEY,
@@ -45,6 +55,7 @@ async function migrate() {
     console.log('✅ Tabla games creada');
 
     // Crear tabla epochs
+    console.log('📝 Creando tabla epochs...');
     await client`
       CREATE TABLE IF NOT EXISTS epochs (
         id SERIAL PRIMARY KEY,
@@ -58,6 +69,7 @@ async function migrate() {
     console.log('✅ Tabla epochs creada');
 
     // Crear tabla game_players
+    console.log('📝 Creando tabla game_players...');
     await client`
       CREATE TABLE IF NOT EXISTS game_players (
         id SERIAL PRIMARY KEY,
@@ -73,6 +85,7 @@ async function migrate() {
     console.log('✅ Tabla game_players creada');
 
     // Crear tabla epoch_scores
+    console.log('📝 Creando tabla epoch_scores...');
     await client`
       CREATE TABLE IF NOT EXISTS epoch_scores (
         id SERIAL PRIMARY KEY,
@@ -95,11 +108,18 @@ async function migrate() {
     console.error('❌ Error en la migración:', error);
     throw error;
   } finally {
-    // Cerrar conexión
+    console.log('🔌 Cerrando conexión...');
     await client.end();
+    console.log('✅ Conexión cerrada');
   }
 }
 
 migrate()
-  .then(() => process.exit(0))
-  .catch(() => process.exit(1));
+  .then(() => {
+    console.log('✅ Script finalizado correctamente');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Script finalizado con error:', error);
+    process.exit(1);
+  });
