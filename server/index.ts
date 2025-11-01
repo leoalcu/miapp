@@ -3,8 +3,12 @@ import session from "express-session";
 import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import ConnectPgSimple from 'connect-pg-simple';
+import postgres from 'postgres';
 
 const app = express();
+const pgStore = ConnectPgSimple(session);
+const pgClient = postgres(process.env.DATABASE_URL!);
 
 declare module 'http' {
   interface IncomingMessage {
@@ -15,6 +19,11 @@ declare module 'http' {
 // Configurar express-session
 app.use(
   session({
+    store: new pgStore({
+      pool: pgClient as any,
+      tableName: 'session',
+      createTableIfMissing: true,
+    }),
     secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
     resave: false,
     saveUninitialized: false,

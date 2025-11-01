@@ -8,7 +8,7 @@ import { requireAuth } from "./auth";
 const router = Router();
 
 // Crear nueva partida
-router.post("/", requireAuth, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { playerIds, variant = "standard" } = req.body; // Array de IDs de jugadores y variante
 
@@ -109,7 +109,7 @@ router.post("/:gameId/epoch/:epochNumber/finish", requireAuth, async (req, res) 
 });
 
 // Finalizar partida completa
-router.post("/:gameId/finish", requireAuth, async (req, res) => {
+router.post("/:gameId/finish", async (req, res) => {
   try {
     const { gameId } = req.params;
     const { finalGolds } = req.body; // [{ userId, finalGold }]
