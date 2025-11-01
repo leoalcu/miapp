@@ -39,7 +39,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
   const currentPlayer = gameState.players.find(p => p.id === playerId);
   const isCurrentTurn = gameState.players[gameState.currentPlayerIndex]?.id === playerId;
 
-  // Show drawn tile dialog when player has a drawn tile
   useEffect(() => {
     if (currentPlayer?.drawnTile && isCurrentTurn) {
       setShowDrawnTileDialog(true);
@@ -48,7 +47,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
     }
   }, [currentPlayer?.drawnTile, isCurrentTurn]);
 
-  // Show save game dialog when game finishes
   useEffect(() => {
     if (gameState.phase === 'finished' && !gameSaved) {
       const timer = setTimeout(() => {
@@ -70,7 +68,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
           col,
         });
       } else if (selectedAction === 'tile') {
-        // Place the previously drawn tile
         await onExecuteAction({
           type: 'PLACE_DRAWN_TILE',
           row,
@@ -84,7 +81,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         });
       }
 
-      // Reset selection
       setSelectedAction(null);
       setSelectedCastleRank(null);
     } catch (err: any) {
@@ -119,9 +115,7 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
     }
     
     try {
-      // First, draw a tile from the deck
       await onExecuteAction({ type: 'DRAW_TILE' });
-      // Dialog will show automatically via useEffect when drawnTile is set
     } catch (err: any) {
       toast({
         title: "Error",
@@ -179,7 +173,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
     }
   };
 
-  // Get highlighted cells (empty cells when an action is selected)
   const highlightedCells = selectedAction
     ? gameState.board.flatMap((row, rowIdx) =>
         row
@@ -192,23 +185,20 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
     row.every(cell => cell.tile || cell.castle)
   );
 
-  // Check if there are any valid moves left for ANY player
   const hasEmptyCells = gameState.board.some(row =>
     row.some(cell => !cell.tile && !cell.castle)
   );
   
-  // Check if ANY player has pending actions or can make a move
   const anyPlayerHasPendingMoves = gameState.players.some(player => 
-    player.drawnTile // Has a drawn tile that MUST be placed
+    player.drawnTile
   );
   
   const anyPlayerCanMakeNewMove = hasEmptyCells && gameState.players.some(player => 
-    gameState.tileDeck.length > 0 || // Can draw tiles
-    player.secretTile || // Can play secret tile
-    Object.values(player.castles).some(count => count > 0) // Can place castle
+    gameState.tileDeck.length > 0 ||
+    player.secretTile ||
+    Object.values(player.castles).some(count => count > 0)
   );
   
-  // Show finish button ONLY when: no pending moves AND (no new moves possible OR board is full)
   const shouldShowFinishEpoch = (gameState.phase === 'playing' || gameState.phase === 'scoring') && 
     !anyPlayerHasPendingMoves && 
     (!anyPlayerCanMakeNewMove || isBoardFull);
@@ -216,7 +206,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto space-y-4">
-        {/* Header */}
         <Card className="p-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <h1 className="text-2xl font-serif font-bold">Kingdoms</h1>
@@ -226,7 +215,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                 <Button 
                   onClick={() => setShowFinalScoreDisplay(true)}
                   variant="default"
-                  data-testid="button-view-final-scores"
                 >
                   Ver Puntuación Final
                 </Button>
@@ -235,7 +223,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                 <Button 
                   onClick={handleFinishEpoch}
                   variant="default"
-                  data-testid="button-finish-epoch"
                   className="animate-pulse"
                 >
                   {isBoardFull ? 'Tablero Lleno - ' : ''}Finalizar Época {gameState.epoch}
@@ -259,7 +246,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                     }
                   }}
                   variant="destructive"
-                  data-testid="button-abandon-game"
                 >
                   Abandonar Partida
                 </Button>
@@ -268,9 +254,7 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
           </div>
         </Card>
 
-        {/* Main Game Area */}
         <div className="grid lg:grid-cols-[1fr_auto_300px] gap-4">
-          {/* Players Left Column */}
           <div className="space-y-2 order-2 lg:order-1">
             <h2 className="text-lg font-serif font-semibold mb-2">Jugadores</h2>
             {gameState.players.map((player, index) => (
@@ -283,7 +267,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
             ))}
           </div>
 
-          {/* Game Board Center */}
           <div className="flex items-start justify-center order-1 lg:order-2">
             <GameBoard
               board={gameState.board}
@@ -293,10 +276,8 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
             />
           </div>
 
-          {/* Action Panel Right Column */}
           <div className="order-3">
             <div className="sticky top-4 space-y-4">
-              {/* Tile Deck Counter */}
               <TileDeckCounter 
                 count={gameState.tileDeck.length}
                 lastPlayedTile={gameState.lastPlayedTile}
@@ -322,14 +303,12 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
                   <Button 
                     onClick={() => setShowFinalScoreDisplay(true)}
                     className="w-full"
-                    data-testid="button-show-final-scores"
                   >
                     Ver Puntuación Final
                   </Button>
                 </Card>
               )}
               
-              {/* Game Log */}
               <div className="h-96">
                 <GameLog gameLog={gameState.gameLog} />
               </div>
@@ -338,7 +317,6 @@ export default function GamePage({ gameState, playerId, onExecuteAction, onFinis
         </div>
       </div>
 
-      {/* Dialogs */}
       {currentPlayer && (
         <CastleSelector
           open={showCastleSelector}

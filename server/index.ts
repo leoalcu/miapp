@@ -3,12 +3,8 @@ import session from "express-session";
 import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import ConnectPgSimple from 'connect-pg-simple';
-import postgres from 'postgres';
 
 const app = express();
-const pgStore = ConnectPgSimple(session);
-const pgClient = postgres(process.env.DATABASE_URL!);
 
 declare module 'http' {
   interface IncomingMessage {
@@ -16,21 +12,16 @@ declare module 'http' {
   }
 }
 
-// Configurar express-session
+// Configurar express-session (MemoryStore por ahora)
 app.use(
   session({
-    store: new pgStore({
-      pool: pgClient as any,
-      tableName: 'session',
-      createTableIfMissing: true,
-    }),
     secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
       maxAge: 1000 * 60 * 60 * 24 * 7, // 7 días
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production", // true en producción
+      secure: process.env.NODE_ENV === "production",
     },
   })
 );
@@ -87,19 +78,12 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
     serveStatic(app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
