@@ -97,9 +97,11 @@ router.post("/register", async (req, res) => {
     // Auto-login después del registro
     req.login(newUser, (err) => {
       if (err) {
-        return res.status(500).json({ error: "Error al iniciar sesión" });
+        console.error("Error en login después de registro:", err);
+        return res.status(500).json({ error: "Usuario creado pero error al iniciar sesión" });
       }
-      res.json({
+      // Asegurarse de enviar respuesta solo una vez
+      return res.json({
         id: newUser.id,
         username: newUser.username,
         displayName: newUser.displayName,
@@ -107,7 +109,10 @@ router.post("/register", async (req, res) => {
     });
   } catch (error) {
     console.error("Error en registro:", error);
-    res.status(500).json({ error: "Error al registrar usuario" });
+    // Solo enviar respuesta si no se ha enviado ya
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Error al registrar usuario" });
+    }
   }
 });
 
@@ -115,6 +120,7 @@ router.post("/register", async (req, res) => {
 router.post("/login", (req, res, next) => {
   passport.authenticate("local", (err: any, user: any, info: any) => {
     if (err) {
+      console.error("Error en autenticación:", err);
       return res.status(500).json({ error: "Error en el servidor" });
     }
     if (!user) {
@@ -122,9 +128,11 @@ router.post("/login", (req, res, next) => {
     }
     req.login(user, (err) => {
       if (err) {
+        console.error("Error en login:", err);
         return res.status(500).json({ error: "Error al iniciar sesión" });
       }
-      res.json({
+      // Asegurarse de enviar respuesta solo una vez
+      return res.json({
         id: user.id,
         username: user.username,
         displayName: user.displayName,
