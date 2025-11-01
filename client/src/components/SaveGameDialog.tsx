@@ -23,42 +23,34 @@ export default function SaveGameDialog({ open, onClose, gameState, onGameSaved }
   const [saving, setSaving] = useState(false);
   const [playerUserMapping, setPlayerUserMapping] = useState<Record<string, number>>({});
 
-  // Auto-map current user if logged in
+  // Auto-map logged in user to their game player
   useEffect(() => {
-    if (user && gameState?.players) {
-      const currentPlayer = gameState.players.find((p: any) => p.id === user.id);
-      if (currentPlayer) {
-        setPlayerUserMapping(prev => ({ ...prev, [currentPlayer.id]: user.id }));
-      }
+    if (user && gameState?.players && open) {
+      // Try to find if any player matches the logged in user
+      setPlayerUserMapping({});
     }
-  }, [user, gameState]);
+  }, [user, gameState, open]);
 
   const handleSaveGame = async () => {
-    if (!user) {
-      toast({
-        title: "Debes iniciar sesión",
-        description: "Inicia sesión para guardar esta partida",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Validate that at least one player is mapped
-    const mappedPlayers = Object.keys(playerUserMapping).filter(key => playerUserMapping[key]);
-    if (mappedPlayers.length === 0) {
-      toast({
-        title: "Vincula al menos un jugador",
-        description: "Debes vincular al menos un jugador con una cuenta registrada",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSaving(true);
 
     try {
-      // Get unique user IDs from mapping
-      const playerIds = Array.from(new Set(Object.values(playerUserMapping).filter(id => id > 0)));
+      // Get mapped user IDs (remove duplicates and zeros)
+      const mappedUserIds = Array.from(
+        new Set(Object.values(playerUserMapping).filter(id => id > 0))
+      );
+
+      if (mappedUserIds.length === 0) {
+        toast({
+          title: "Vincula al menos un jugador",
+          description: "Debes vincular al menos un jugador con una cuenta registrada",
+          variant: "destructive",
+        });
+        setSaving(false);
+        return;
+      }
+
+      console.log('Creating game with players:', mappedUserIds);
 
       // 1. Create game
       const createGameResponse = await fetch('/api/games', {
@@ -66,27 +58,28 @@ export default function SaveGameDialog({ open, onClose, gameState, onGameSaved }
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({
-          playerIds,
+          playerIds: mappedUserIds,
           variant: 'standard',
         }),
       });
 
       if (!createGameResponse.ok) {
-        throw new Error('Error al crear partida');
+        const errorData = await createGameResponse.json();
+        throw new Error(errorData.error || 'Error al crear partida');
       }
 
       const { gameId } = await createGameResponse.json();
+      console.log('Game created with ID:', gameId);
 
-      // 2. Save each epoch's scores (simplified for now)
-      // In a complete implementation, you'd save epoch-by-epoch data from gameState.gameLog
-
-      // 3. Finish game with final scores
+      // 2. Finish game with final scores
       const finalGolds = gameState.players
         .filter((player: any) => playerUserMapping[player.id])
         .map((player: any) => ({
           userId: playerUserMapping[player.id],
           finalGold: player.gold,
         }));
+
+      console.log('Finishing game with scores:', finalGolds);
 
       const finishGameResponse = await fetch(`/api/games/${gameId}/finish`, {
         method: 'POST',
@@ -96,7 +89,8 @@ export default function SaveGameDialog({ open, onClose, gameState, onGameSaved }
       });
 
       if (!finishGameResponse.ok) {
-        throw new Error('Error al finalizar partida');
+        const errorData = await finishGameResponse.json();
+        throw new Error(errorData.error || 'Error al finalizar partida');
       }
 
       toast({
@@ -107,6 +101,7 @@ export default function SaveGameDialog({ open, onClose, gameState, onGameSaved }
       onGameSaved();
       onClose();
     } catch (error: any) {
+      console.error('Error saving game:', error);
       toast({
         title: "Error",
         description: error.message,
@@ -197,11 +192,11 @@ export default function SaveGameDialog({ open, onClose, gameState, onGameSaved }
                     <p className="text-sm text-muted-foreground">{player.gold} oro</p>
                   </div>
                   <Select
-                    value={playerUserMapping[player.id]?.toString() || ""}
+                    value={playerUserMapping[player.id]?.toString() || "0"}
                     onValueChange={(value) => {
                       setPlayerUserMapping(prev => ({
                         ...prev,
-                        [player.id]: parseInt(value) || 0,
+                        [player.id]: parseInt(value),
                       }));
                     }}
                   >
