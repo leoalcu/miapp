@@ -269,7 +269,7 @@ router.get("/rankings", requireAuth, async (req, res) => {
 });
 
 // Obtener lista de usuarios para seleccionar jugadores
-router.get("/users", requireAuth, async (req, res) => {
+router.get("/users", async (req, res) => {
   try {
     const allUsers = await db
       .select({
