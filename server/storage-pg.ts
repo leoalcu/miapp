@@ -1,10 +1,19 @@
 // server/storage-pg.ts
-import { GameState, Player } from "@shared/schema";
+import { GameState } from "@shared/schema";
 import { generateRoomCode } from "./game-logic";
-import { db } from "../db";
-import { sql } from "drizzle-orm";
+import postgres from 'postgres';
 
 const PLAYER_COLORS: Array<"red" | "blue" | "yellow" | "green"> = ["red", "blue", "yellow", "green"];
+
+// Crear conexión directa a PostgreSQL
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DATABASE_URL no está definida');
+}
+
+const sql = postgres(connectionString, {
+  ssl: process.env.NODE_ENV === 'production' ? 'require' : false,
+});
 
 export const storage = {
   async createRoom(playerName: string): Promise<{ roomCode: string; playerId: string; playerColor: "red" | "blue" | "yellow" | "green" }> {
@@ -64,15 +73,15 @@ export const storage = {
 
   async getRoom(roomCode: string): Promise<GameState | null> {
     try {
-      const result = await db.execute(
-        sql`SELECT game_state FROM game_rooms WHERE room_code = ${roomCode}`
-      );
+      const result = await sql`
+        SELECT game_state FROM game_rooms WHERE room_code = ${roomCode}
+      `;
 
-      if (result.rows.length === 0) {
+      if (!result || result.length === 0) {
         return null;
       }
 
-      return result.rows[0].game_state as GameState;
+      return result[0].game_state as GameState;
     } catch (error) {
       console.error('Error getting room:', error);
       return null;
@@ -81,16 +90,14 @@ export const storage = {
 
   async saveRoom(roomCode: string, gameState: GameState): Promise<void> {
     try {
-      await db.execute(
-        sql`
-          INSERT INTO game_rooms (room_code, game_state, updated_at)
-          VALUES (${roomCode}, ${JSON.stringify(gameState)}::jsonb, NOW())
-          ON CONFLICT (room_code) 
-          DO UPDATE SET 
-            game_state = ${JSON.stringify(gameState)}::jsonb,
-            updated_at = NOW()
-        `
-      );
+      await sql`
+        INSERT INTO game_rooms (room_code, game_state, updated_at)
+        VALUES (${roomCode}, ${JSON.stringify(gameState)}, NOW())
+        ON CONFLICT (room_code) 
+        DO UPDATE SET 
+          game_state = ${JSON.stringify(gameState)},
+          updated_at = NOW()
+      `;
     } catch (error) {
       console.error('Error saving room:', error);
       throw error;
@@ -103,23 +110,19 @@ export const storage = {
 
   async deleteRoom(roomCode: string): Promise<void> {
     try {
-      await db.execute(
-        sql`DELETE FROM game_rooms WHERE room_code = ${roomCode}`
-      );
+      await sql`DELETE FROM game_rooms WHERE room_code = ${roomCode}`;
     } catch (error) {
       console.error('Error deleting room:', error);
     }
   },
 
-  // Limpiar partidas viejas (más de 24 horas sin actualizar)
   async cleanOldRooms(): Promise<void> {
     try {
-      await db.execute(
-        sql`
-          DELETE FROM game_rooms 
-          WHERE updated_at < NOW() - INTERVAL '24 hours'
-        `
-      );
+      await sql`
+        DELETE FROM game_rooms 
+        WHERE updated_at < NOW() - INTERVAL '24 hours'
+      `;
+      console.log('🧹 Cleaned old game rooms');
     } catch (error) {
       console.error('Error cleaning old rooms:', error);
     }
