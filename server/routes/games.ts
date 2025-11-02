@@ -3,26 +3,22 @@ import { Router } from "express";
 import { db } from "../../db";
 import { games, gamePlayers, users, epochs, epochScores } from "../../db/schema";
 import { eq, desc, and, sql, count, sum } from "drizzle-orm";
-import { requireAuth } from "./auth";
 
 const router = Router();
 
 // Crear nueva partida
 router.post("/", async (req, res) => {
   try {
-    const { playerIds, variant = "standard" } = req.body; // Array de IDs de jugadores y variante
+    const { playerIds, variant = "standard" } = req.body;
 
-    if (!playerIds || playerIds.length < 2 || playerIds.length > 4) {
-      return res.status(400).json({ error: "Debe haber entre 2 y 4 jugadores" });
+    if (!playerIds || playerIds.length < 1 || playerIds.length > 4) {
+      return res.status(400).json({ error: "Debe haber entre 1 y 4 jugadores" });
     }
 
-    // Crear la partida
     const [game] = await db.insert(games).values({ variant }).returning();
 
-    // Colores disponibles
     const colors = ["red", "blue", "yellow", "green"];
 
-    // Agregar jugadores a la partida
     const playerPromises = playerIds.map((userId: number, index: number) =>
       db.insert(gamePlayers).values({
         gameId: game.id,
@@ -33,7 +29,6 @@ router.post("/", async (req, res) => {
 
     await Promise.all(playerPromises);
 
-    // Crear la primera época
     await db.insert(epochs).values({
       gameId: game.id,
       epochNumber: 1,
@@ -46,77 +41,14 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Finalizar una época y registrar resultados
-router.post("/:gameId/epoch/:epochNumber/finish", requireAuth, async (req, res) => {
-  try {
-    const { gameId, epochNumber } = req.params;
-    const { playerScores } = req.body; 
-    // playerScores: [{ userId, goldAtStart, goldEarned, goldAtEnd, castlesPlaced, rank1Used, rank2Used, rank3Used, rank4Used }]
-
-    const finishedAt = new Date();
-
-    // Buscar la época
-    const [epoch] = await db
-      .select()
-      .from(epochs)
-      .where(
-        and(
-          eq(epochs.gameId, parseInt(gameId)),
-          eq(epochs.epochNumber, parseInt(epochNumber))
-        )
-      )
-      .limit(1);
-
-    if (!epoch) {
-      return res.status(404).json({ error: "Época no encontrada" });
-    }
-
-    // Actualizar época como finalizada
-    await db
-      .update(epochs)
-      .set({ finishedAt })
-      .where(eq(epochs.id, epoch.id));
-
-    // Guardar scores de cada jugador
-    for (const score of playerScores) {
-      await db.insert(epochScores).values({
-        epochId: epoch.id,
-        userId: score.userId,
-        goldAtStart: score.goldAtStart,
-        goldEarned: score.goldEarned,
-        goldAtEnd: score.goldAtEnd,
-        castlesPlaced: score.castlesPlaced || 0,
-        rank1Used: score.rank1Used || 0,
-        rank2Used: score.rank2Used || 0,
-        rank3Used: score.rank3Used || 0,
-        rank4Used: score.rank4Used || 0,
-      });
-    }
-
-    // Si es la tercera época, crear la siguiente
-    if (parseInt(epochNumber) < 3) {
-      await db.insert(epochs).values({
-        gameId: parseInt(gameId),
-        epochNumber: parseInt(epochNumber) + 1,
-      });
-    }
-
-    res.json({ message: "Época finalizada exitosamente" });
-  } catch (error) {
-    console.error("Error al finalizar época:", error);
-    res.status(500).json({ error: "Error al finalizar época" });
-  }
-});
-
 // Finalizar partida completa
 router.post("/:gameId/finish", async (req, res) => {
   try {
     const { gameId } = req.params;
-    const { finalGolds } = req.body; // [{ userId, finalGold }]
+    const { finalGolds } = req.body;
 
     const finishedAt = new Date();
 
-    // Obtener la partida
     const [game] = await db
       .select()
       .from(games)
@@ -127,22 +59,18 @@ router.post("/:gameId/finish", async (req, res) => {
       return res.status(404).json({ error: "Partida no encontrada" });
     }
 
-    // Calcular duración
     const durationMinutes = Math.round(
       (finishedAt.getTime() - game.startedAt.getTime()) / 60000
     );
 
-    // Ordenar jugadores por oro final (mayor a menor)
     const sortedPlayers = [...finalGolds].sort((a, b) => b.finalGold - a.finalGold);
 
-    // Actualizar cada jugador con su posición y oro final
     let currentPosition = 1;
     let previousGold = sortedPlayers[0]?.finalGold;
 
     for (let i = 0; i < sortedPlayers.length; i++) {
       const player = sortedPlayers[i];
-
-      // Si tiene el mismo oro que el anterior, mantiene la posición (empate)
+      
       if (i > 0 && player.finalGold !== previousGold) {
         currentPosition = i + 1;
       }
@@ -166,7 +94,6 @@ router.post("/:gameId/finish", async (req, res) => {
       previousGold = player.finalGold;
     }
 
-    // Actualizar la partida
     await db
       .update(games)
       .set({
@@ -186,8 +113,8 @@ router.post("/:gameId/finish", async (req, res) => {
   }
 });
 
-// Obtener historial completo de partidas
-router.get("/history", requireAuth, async (req, res) => {
+// Obtener historial completo (SIN requireAuth)
+router.get("/history", async (req, res) => {
   try {
     const allGames = await db
       .select({
@@ -203,7 +130,6 @@ router.get("/history", requireAuth, async (req, res) => {
       .orderBy(desc(games.finishedAt))
       .limit(50);
 
-    // Obtener jugadores de cada partida
     const gamesWithPlayers = await Promise.all(
       allGames.map(async (game) => {
         const players = await db
@@ -231,8 +157,8 @@ router.get("/history", requireAuth, async (req, res) => {
   }
 });
 
-// Ranking general
-router.get("/rankings", requireAuth, async (req, res) => {
+// Ranking general (SIN requireAuth)
+router.get("/rankings", async (req, res) => {
   try {
     const rankings = await db
       .select({
@@ -268,7 +194,7 @@ router.get("/rankings", requireAuth, async (req, res) => {
   }
 });
 
-// Obtener lista de usuarios para seleccionar jugadores
+// Obtener lista de usuarios
 router.get("/users", async (req, res) => {
   try {
     const allUsers = await db
