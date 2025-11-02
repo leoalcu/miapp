@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { Server as SocketIOServer } from "socket.io";
-import { storage } from "./storage";
+import { storage } from "./storage-pg";
 import { executeAction, applyScoresAndNextEpoch, calculateEpochScores, initializeGame } from "./game-logic";
 import { createPlayerView } from "./game-utils";
 import { GameAction, GameState } from "@shared/schema";
