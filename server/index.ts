@@ -3,6 +3,8 @@ import session from "express-session";
 import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import pkg from 'pg';
+const { Pool } = pkg;
 
 const app = express();
 
@@ -12,62 +14,127 @@ declare module 'http' {
   }
 }
 
-// Configurar express-session (MemoryStore por ahora)
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      maxAge: 1000 * 60 * 60 * 24 * 7, // 7 días
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-    },
-  })
-);
-
-// Inicializar Passport
-app.use(passport.initialize());
-app.use(passport.session());
-
-app.use(express.json({
-  verify: (req, _res, buf) => {
-    req.rawBody = buf;
+// Crear tabla de sesiones manualmente
+async function createSessionTable() {
+  if (!process.env.DATABASE_URL) {
+    console.warn('⚠️ DATABASE_URL not found, sessions will use MemoryStore');
+    return null;
   }
-}));
-app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+  try {
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    });
 
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
+    // Crear tabla de sesiones si no existe
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" varchar NOT NULL COLLATE "default",
+        "sess" json NOT NULL,
+        "expire" timestamp(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      );
+    `);
 
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
+    // Crear índice para expiración
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire");
+    `);
 
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
+    console.log('✅ Session table created/verified');
+    return pool;
+  } catch (error) {
+    console.error('❌ Error creating session table:', error);
+    return null;
+  }
+}
 
-      log(logLine);
+// Configurar express-session con PostgreSQL
+(async () => {
+  const sessionPool = await createSessionTable();
+
+  if (sessionPool) {
+    // Usar PostgreSQL para sesiones
+    const pgSession = (await import('connect-pg-simple')).default(session);
+    
+    app.use(
+      session({
+        store: new pgSession({
+          pool: sessionPool,
+          tableName: 'session',
+          createTableIfMissing: false, // Ya la creamos manualmente
+        }),
+        secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: 'lax',
+        },
+      })
+    );
+    console.log('✅ Using PostgreSQL session store');
+  } else {
+    // Fallback a MemoryStore
+    app.use(
+      session({
+        secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+          maxAge: 1000 * 60 * 60 * 24 * 7,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+        },
+      })
+    );
+    console.log('⚠️ Using MemoryStore (sessions will be lost on restart)');
+  }
+
+  // Inicializar Passport
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  app.use(express.json({
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
     }
+  }));
+  app.use(express.urlencoded({ extended: false }));
+
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const path = req.path;
+    let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+    const originalResJson = res.json;
+    res.json = function (bodyJson, ...args) {
+      capturedJsonResponse = bodyJson;
+      return originalResJson.apply(res, [bodyJson, ...args]);
+    };
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      if (path.startsWith("/api")) {
+        let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+        if (capturedJsonResponse) {
+          logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        }
+
+        if (logLine.length > 80) {
+          logLine = logLine.slice(0, 79) + "…";
+        }
+
+        log(logLine);
+      }
+    });
+
+    next();
   });
 
-  next();
-});
-
-(async () => {
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
