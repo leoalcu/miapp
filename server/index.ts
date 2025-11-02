@@ -4,6 +4,7 @@ import passport from "passport";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import pkg from 'pg';
+import { noopEncoder } from "drizzle-orm";
 const { Pool } = pkg;
 
 const app = express();
@@ -66,14 +67,15 @@ async function createSessionTable() {
           createTableIfMissing: false, // Ya la creamos manualmente
         }),
         secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
-        resave: false,
-        saveUninitialized: false,
+        resave: true,
+        saveUninitialized: true,
         cookie: {
           maxAge: 1000 * 60 * 60 * 24 * 30, // 30 días
           httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
-          sameSite: 'lax',
+          secure: false,
+          sameSite: "none",
         },
+        proxy: true, // Importante para Render
       })
     );
     console.log('✅ Using PostgreSQL session store');
@@ -82,13 +84,15 @@ async function createSessionTable() {
     app.use(
       session({
         secret: process.env.SESSION_SECRET || "kingdoms-secret-change-this-in-production",
-        resave: false,
-        saveUninitialized: false,
+        resave: true,
+        saveUninitialized: true,
         cookie: {
           maxAge: 1000 * 60 * 60 * 24 * 7,
-          httpOnly: true,
-          secure: process.env.NODE_ENV === "production",
+          httpOnly: false,
+          secure: false,
+          sameSite: 'none', // Cambiar a none
         },
+        proxy: true, // Agregar esto
       })
     );
     console.log('⚠️ Using MemoryStore (sessions will be lost on restart)');
